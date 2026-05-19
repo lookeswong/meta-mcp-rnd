@@ -2,9 +2,18 @@ import json
 import os
 from typing import Any
 
+import httpx
 from openai import AsyncOpenAI
 
 from app import mcp_client, registry
+
+
+class MCPUnavailableError(Exception):
+    pass
+
+
+class MCPTimeoutError(Exception):
+    pass
 
 MODEL = "gpt-4o"
 MAX_TURNS = 12
@@ -35,6 +44,14 @@ When the user names a campaign / ad set / ad, match against the actual names as 
 
 NOT-FOUND HANDLING:
 If after substring matching no entity is found in the relevant account(s), respond clearly that the named entity was not found, and list the actual available names that the user could have meant. Do not invent data. Do not raise exceptions to the user — convert any tool error into a clear plain-text explanation.
+
+OUT-OF-SCOPE HANDLING:
+This prototype only retrieves and summarises existing Meta Ads data. If the user asks for things outside that scope — strategic advice, budget recommendations, future predictions, creative copywriting, market analysis, competitor data — respond clearly that the prototype cannot help with that, and list what you CAN answer:
+- List ad accounts and campaigns
+- Show performance metrics (impressions, clicks, CTR, spend, reach) for any date range
+- Drill into ad sets and ads within a campaign
+- Rank ads or ad sets by a metric
+Do not invent advice or speculation.
 
 RESPONSE STYLE:
 Plain text. Include the concrete metric values returned by the tools (impressions, clicks, CTR, spend, reach) with their units. Never fabricate metrics, campaign names, ad names, or IDs. Only report what the tools return.
@@ -93,6 +110,10 @@ async def run_query(query: str, *, client: AsyncOpenAI | None = None) -> str:
                 args = {}
             try:
                 result = await mcp_client.call_tool(tc.function.name, args)
+            except httpx.TimeoutException as exc:
+                raise MCPTimeoutError(str(exc)) from exc
+            except (httpx.ConnectError, httpx.RequestError) as exc:
+                raise MCPUnavailableError(str(exc)) from exc
             except Exception as exc:
                 result = {"error": str(exc)}
             messages.append(_tool_messages(tc, result))
