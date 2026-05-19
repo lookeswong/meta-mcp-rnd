@@ -144,7 +144,11 @@ R=$(post_query '{"query":"which ad in campaign 14293_eva-airways_my-ao-boost-soc
 check_contains "best CTR ad has CTR value" "$R" "ctr"
 
 R=$(post_query '{"query":"show performance of the Nonexistent Campaign XYZ123 over the last week"}' 120 | extract_response)
-check_contains "not-found message" "$R" "not found"
+if printf '%s' "$R" | grep -qiE "not found|could ?n.t find|no campaign|cannot find|did n.t find|unable to find"; then
+  pass "not-found message"
+else
+  fail "not-found message" "no recognised not-found phrasing | got (first 200): ${R:0:200}"
+fi
 check_not_contains "not-found has no traceback" "$R" "traceback"
 
 # ---------- Slice 4: error handling ----------
@@ -184,6 +188,12 @@ sleep 6
 section "Slice 5 — multi-turn conversation"
 R=$(post_query '{"query":"how many campaigns does the first one have?","history":[{"role":"user","content":"list my ad accounts"},{"role":"assistant","content":"Your ad accounts are: 1) [KD] Eva Airways (id 461625307955114), 2) [KD] Kingdom Digital MYSG (id 370090957436230), 3) Ryan Ong (id 1046725683201442)"}]}' 180 | extract_response)
 check_contains "follow-up resolves 'the first one' → Eva Airways" "$R" "eva airways"
+
+# ---------- Slice 6: creative generation ----------
+section "Slice 6 — creative generation"
+R=$(post_query '{"query":"based on the top 3 ads in Eva Airways last 90 days, generate 3 new copy variations targeting flight tickets"}' 300 | extract_response)
+check_contains "copy gen mentions PATTERNS DETECTED" "$R" "patterns detected"
+check_contains "copy gen marks variations as DRAFT" "$R" "draft"
 
 # ---------- Summary ----------
 section "Summary"
