@@ -2,6 +2,9 @@
 __pycache__/
 *.pyc
 .venv/
+.mcp-venv/
 venv/
 .pytest_cache/
 .DS_Store
+.claude/ralph-loop.local.md
+.claude/settings.local.json
