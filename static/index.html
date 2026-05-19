@@ -6,44 +6,90 @@
 <style>
   body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
   textarea { width: 100%; padding: 0.5rem; font-size: 1rem; box-sizing: border-box; }
-  button { margin-top: 0.5rem; padding: 0.5rem 1rem; font-size: 1rem; cursor: pointer; }
+  button { margin-top: 0.5rem; padding: 0.5rem 1rem; font-size: 1rem; cursor: pointer; margin-right: 0.5rem; }
   button:disabled { opacity: 0.5; cursor: wait; }
-  #response { margin-top: 1.5rem; padding: 1rem; background: #f5f5f5; border-radius: 4px; white-space: pre-wrap; min-height: 2rem; }
+  #thread { margin-top: 1.5rem; max-height: 60vh; overflow-y: auto; border: 1px solid #ddd; border-radius: 4px; padding: 0.5rem; background: #fafafa; }
+  .turn { padding: 0.75rem 1rem; margin: 0.5rem 0; border-radius: 4px; white-space: pre-wrap; }
+  .turn.user { background: #e8f0fe; }
+  .turn.assistant { background: #fff; border: 1px solid #eee; }
+  .label { font-weight: 600; font-size: 0.8rem; color: #555; margin-bottom: 0.25rem; text-transform: uppercase; }
+  .empty { color: #888; text-align: center; padding: 1rem; }
 </style>
 </head>
 <body>
 <h1>Meta MCP Prototype</h1>
+<div id="thread"><div class="empty">No messages yet. Ask something about your Meta ads.</div></div>
 <form id="query-form">
   <textarea id="query" rows="3" placeholder="Ask about your Meta ads..." required></textarea>
   <button type="submit" id="submit">Submit</button>
+  <button type="button" id="reset">Reset</button>
 </form>
-<div id="response"></div>
 <script>
 const form = document.getElementById("query-form");
 const queryEl = document.getElementById("query");
-const responseEl = document.getElementById("response");
+const threadEl = document.getElementById("thread");
 const submitBtn = document.getElementById("submit");
+const resetBtn = document.getElementById("reset");
+
+let history = [];
+
+function render() {
+  if (history.length === 0) {
+    threadEl.innerHTML = '<div class="empty">No messages yet. Ask something about your Meta ads.</div>';
+    return;
+  }
+  threadEl.innerHTML = "";
+  for (const turn of history) {
+    const div = document.createElement("div");
+    div.className = "turn " + turn.role;
+    const label = document.createElement("div");
+    label.className = "label";
+    label.textContent = turn.role === "user" ? "You" : "Assistant";
+    const body = document.createElement("div");
+    body.textContent = turn.content;
+    div.appendChild(label);
+    div.appendChild(body);
+    threadEl.appendChild(div);
+  }
+  threadEl.scrollTop = threadEl.scrollHeight;
+}
+
+resetBtn.addEventListener("click", () => {
+  history = [];
+  render();
+});
 
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
   const query = queryEl.value.trim();
   if (!query) return;
   submitBtn.disabled = true;
-  responseEl.textContent = "Loading...";
+  resetBtn.disabled = true;
+
+  const sentHistory = history.slice();
+  history.push({ role: "user", content: query });
+  history.push({ role: "assistant", content: "Thinking..." });
+  render();
+  queryEl.value = "";
+
   try {
     const res = await fetch("/api/query", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query })
+      body: JSON.stringify({ query, history: sentHistory })
     });
     const data = await res.json();
-    responseEl.textContent = data.response ?? JSON.stringify(data);
+    history[history.length - 1].content = data.response ?? JSON.stringify(data);
   } catch (err) {
-    responseEl.textContent = "Error: " + err.message;
+    history[history.length - 1].content = "Error: " + err.message;
   } finally {
     submitBtn.disabled = false;
+    resetBtn.disabled = false;
+    render();
   }
 });
+
+render();
 </script>
 </body>
 </html>

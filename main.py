@@ -33,8 +33,14 @@ STATIC_DIR = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
+class Message(BaseModel):
+    role: str
+    content: str
+
+
 class QueryRequest(BaseModel):
     query: str
+    history: list[Message] = []
 
 
 class QueryResponse(BaseModel):
@@ -49,7 +55,8 @@ async def root() -> FileResponse:
 @app.post("/api/query", response_model=QueryResponse)
 async def query(req: QueryRequest) -> QueryResponse:
     try:
-        text = await orchestrator.run_query(req.query)
+        history = [m.model_dump() for m in req.history]
+        text = await orchestrator.run_query(req.query, history=history)
     except orchestrator.MCPUnavailableError as exc:
         print(f"[query] MCP unavailable: {exc}")
         text = MSG_UNAVAILABLE

@@ -70,11 +70,34 @@ def _tool_messages(tool_call: Any, result: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-async def run_query(query: str, *, client: AsyncOpenAI | None = None) -> str:
+def _sanitize_history(history: list[dict] | None) -> list[dict[str, Any]]:
+    if not history:
+        return []
+    cleaned: list[dict[str, Any]] = []
+    for item in history:
+        if not isinstance(item, dict):
+            continue
+        role = item.get("role")
+        content = item.get("content")
+        if role not in {"user", "assistant"}:
+            continue
+        if not isinstance(content, str):
+            continue
+        cleaned.append({"role": role, "content": content})
+    return cleaned
+
+
+async def run_query(
+    query: str,
+    *,
+    history: list[dict] | None = None,
+    client: AsyncOpenAI | None = None,
+) -> str:
     client = client or _build_client()
     tools = registry.get_openai_tools()
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": SYSTEM_PROMPT},
+        *_sanitize_history(history),
         {"role": "user", "content": query},
     ]
 
